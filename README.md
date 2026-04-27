@@ -1,18 +1,20 @@
-InvokeAI on Proxmox LXC with RTX 5070 Ti
+# InvokeAI on Proxmox LXC with RTX 5070 Ti
 
-Tested target:
+Tested environment:
 
-Proxmox LXC
-Ubuntu 24.04
-NVIDIA RTX 5070 Ti / Blackwell
-InvokeAI 6.12.0
-PyTorch 2.7.1 + CUDA 12.8
-1. Pass NVIDIA GPU into the LXC
+- Proxmox LXC
+- Ubuntu 24.04
+- NVIDIA RTX 5070 Ti (Blackwell)
+- InvokeAI 6.12.0
+- PyTorch 2.7.1 + CUDA 12.8
 
-Run on the Proxmox host.
+---
 
-Replace 152 with your LXC ID if different.
+## 1. Pass NVIDIA GPU into the LXC (Proxmox host)
 
+Replace `152` with your container ID.
+
+```bash
 pct set 152 -dev0 /dev/nvidia0
 pct set 152 -dev1 /dev/nvidiactl
 pct set 152 -dev2 /dev/nvidia-uvm
@@ -22,13 +24,10 @@ pct set 152 -dev5 /dev/nvidia-caps/nvidia-cap2
 
 pct restart 152
 2. Verify GPU inside the LXC
-
-Run inside the LXC.
-
 nvidia-smi
 ls -l /dev/nvidia*
 
-If nvidia-smi does not work, fix GPU passthrough before continuing.
+If this fails, stop and fix GPU passthrough.
 
 3. Install base packages
 apt update && apt upgrade -y
@@ -40,24 +39,22 @@ apt install -y \
   python3-pip \
   build-essential \
   ffmpeg
-4. Create Python virtual environment
+4. Create Python environment
 python3 -m venv /opt/invokeai
 source /opt/invokeai/bin/activate
 
 pip install --upgrade pip
 5. Install InvokeAI
 pip install invokeai
-6. Replace PyTorch with Blackwell-compatible CUDA 12.8 build
+6. Install Blackwell-compatible PyTorch (CRITICAL)
 
-InvokeAI installed Torch, but the default wheel did not support RTX 5070 Ti sm_120.
-
-Fix it with:
+Default Torch install does not support RTX 50-series (sm_120).
 
 pip uninstall -y torch torchvision torchaudio triton
 
 pip install torch==2.7.1+cu128 torchvision==0.22.1+cu128 torchaudio==2.7.1+cu128 \
   --index-url https://download.pytorch.org/whl/cu128
-7. Verify PyTorch sees the RTX 5070 Ti correctly
+7. Verify CUDA + GPU
 python - <<'PY'
 import torch
 print("torch:", torch.__version__)
@@ -67,7 +64,7 @@ print("arch list:", torch.cuda.get_arch_list())
 print("gpu:", torch.cuda.get_device_name(0))
 PY
 
-Expected important lines:
+Expected:
 
 torch: 2.7.1+cu128
 cuda: 12.8
@@ -76,7 +73,7 @@ arch list: ... sm_120 ...
 gpu: NVIDIA GeForce RTX 5070 Ti
 8. Create InvokeAI runtime root
 mkdir -p /opt/invokeai-root/{models,outputs,databases,nodes}
-9. Create InvokeAI config
+9. Create config file
 cat > /opt/invokeai-root/invokeai.yaml <<'EOF'
 schema_version: 4.0.2
 host: 0.0.0.0
@@ -86,70 +83,63 @@ outputs_dir: outputs
 db_dir: databases
 custom_nodes_dir: nodes
 EOF
-
-Important: a minimal config without schema_version failed.
-
 10. Start InvokeAI
 source /opt/invokeai/bin/activate
 invokeai-web --root /opt/invokeai-root
-
-Open:
-
+11. Access UI
 http://<LXC-IP>:9090
 
-Find the LXC IP:
+Find IP:
 
 hostname -I
-11. Monitor GPU usage
+12. Monitor GPU usage
 watch -n 1 nvidia-smi
-What failed
-Failed: old InvokeAI command
-invokeai-configure --root /opt/invokeai-root
+Failures & Fixes
+❌ Old setup command
+invokeai-configure
 
-Result:
+Error:
 
-invokeai-configure: command not found
+command not found
 
-InvokeAI 6.x does not use that older setup flow.
+Fix: Not used in InvokeAI 6.x.
 
-Failed: CLI host/port flags
+❌ CLI host/port flags
 invokeai-web --host 0.0.0.0 --port 9090
 
-Result:
+Error:
 
-unrecognized arguments: --host 0.0.0.0 --port 9090
+unrecognized arguments
 
-Use invokeai.yaml instead.
+Fix: Configure in invokeai.yaml.
 
-Failed: minimal config
-host: 0.0.0.0
-port: 9090
+❌ Missing schema_version
 
-Result:
+Minimal config caused:
 
 KeyError: 'schema_version'
 
-Fix was:
+Fix:
 
 schema_version: 4.0.2
-Failed: default PyTorch CUDA build
+❌ Wrong PyTorch build
 
-Torch saw the GPU but did not support Blackwell:
+Error:
 
-NVIDIA GeForce RTX 5070 Ti with CUDA capability sm_120 is not compatible
+sm_120 not supported
 
-Fix was installing:
+Fix:
 
-torch 2.7.1+cu128
-Recommended first models
+pip install torch==2.7.1+cu128 ...
+Recommended Models
 
-Start with SDXL models before FLUX:
+Start with:
 
 Juggernaut XL
 RealVisXL
 DreamShaper XL
 
-Then test:
+Then try:
 
-FLUX.1-schnell
-FLUX.1-dev
+FLUX.1-schnell (fast)
+FLUX.1-dev (higher quality)
