@@ -119,7 +119,7 @@ custom_nodes_dir: nodes
 EOF
 ```
 
-## 10. Start InvokeAI
+## 10. Start InvokeAI manually
 
 ```bash
 source /opt/invokeai/bin/activate
@@ -140,7 +140,67 @@ Open:
 http://<LXC-IP>:9090
 ```
 
-## 12. Monitor GPU usage
+## 12. Run InvokeAI as a systemd service
+
+Create the service file:
+
+```bash
+vi /etc/systemd/system/invokeai.service
+```
+
+Press `i`, paste this service definition, then save with `Esc`, `:wq`, and `Enter`.
+
+```ini
+[Unit]
+Description=InvokeAI Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/invokeai-root
+Environment=INVOKEAI_ROOT=/opt/invokeai-root
+ExecStart=/opt/invokeai/bin/invokeai-web --root /opt/invokeai-root
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+```
+
+Reload systemd:
+
+```bash
+systemctl daemon-reexec
+systemctl daemon-reload
+```
+
+Enable and start InvokeAI:
+
+```bash
+systemctl enable invokeai
+systemctl start invokeai
+```
+
+Check status:
+
+```bash
+systemctl status invokeai
+```
+
+View logs:
+
+```bash
+journalctl -u invokeai -f
+```
+
+Restart the service:
+
+```bash
+systemctl restart invokeai
+```
+
+## 13. Monitor GPU usage
 
 ```bash
 watch -n 1 nvidia-smi
