@@ -1,18 +1,20 @@
 # InvokeAI on Proxmox LXC with RTX 5070 Ti
 
+Fast install guide for running InvokeAI inside a Proxmox LXC with an NVIDIA RTX 5070 Ti GPU.
+
 Tested environment:
 
 - Proxmox LXC
 - Ubuntu 24.04
-- NVIDIA RTX 5070 Ti (Blackwell)
+- NVIDIA RTX 5070 Ti
 - InvokeAI 6.12.0
 - PyTorch 2.7.1 + CUDA 12.8
 
----
+## 1. Pass the NVIDIA GPU into the LXC
 
-## 1. Pass NVIDIA GPU into the LXC (Proxmox host)
+Run on the Proxmox host.
 
-Replace `152` with your container ID.
+Replace `152` with your LXC ID.
 
 ```bash
 pct set 152 -dev0 /dev/nvidia0
@@ -25,14 +27,14 @@ pct set 152 -dev5 /dev/nvidia-caps/nvidia-cap2
 pct restart 152
 ```
 
-## 2. Verify GPU inside the LXC
+## 2. Verify GPU access inside the LXC
 
 ```bash
 nvidia-smi
 ls -l /dev/nvidia*
 ```
 
-If this fails, stop and fix GPU passthrough.
+If this fails, stop and fix GPU passthrough before continuing.
 
 ## 3. Install base packages
 
@@ -48,7 +50,7 @@ apt install -y \
   ffmpeg
 ```
 
-## 4. Create Python environment
+## 4. Create the Python environment
 
 ```bash
 python3 -m venv /opt/invokeai
@@ -63,9 +65,9 @@ pip install --upgrade pip
 pip install invokeai
 ```
 
-## 6. Install Blackwell-compatible PyTorch (CRITICAL)
+## 6. Install PyTorch with CUDA 12.8 support
 
-Default Torch install does not support RTX 50-series (`sm_120`).
+This is required for RTX 50-series / Blackwell GPUs.
 
 ```bash
 pip uninstall -y torch torchvision torchaudio triton
@@ -74,7 +76,7 @@ pip install torch==2.7.1+cu128 torchvision==0.22.1+cu128 torchaudio==2.7.1+cu128
   --index-url https://download.pytorch.org/whl/cu128
 ```
 
-## 7. Verify CUDA + GPU
+## 7. Verify PyTorch CUDA support
 
 ```bash
 python - <<'PY'
@@ -87,7 +89,7 @@ print("gpu:", torch.cuda.get_device_name(0))
 PY
 ```
 
-Expected:
+Expected result should include:
 
 ```text
 torch: 2.7.1+cu128
@@ -97,13 +99,13 @@ arch list: ... sm_120 ...
 gpu: NVIDIA GeForce RTX 5070 Ti
 ```
 
-## 8. Create InvokeAI runtime root
+## 8. Create the InvokeAI runtime directory
 
 ```bash
 mkdir -p /opt/invokeai-root/{models,outputs,databases,nodes}
 ```
 
-## 9. Create config file
+## 9. Create the InvokeAI config
 
 ```bash
 cat > /opt/invokeai-root/invokeai.yaml <<'EOF'
@@ -124,18 +126,18 @@ source /opt/invokeai/bin/activate
 invokeai-web --root /opt/invokeai-root
 ```
 
-## 11. Access UI
-
-Open this URL in your browser:
-
-```text
-http://<LXC-IP>:9090
-```
+## 11. Open InvokeAI
 
 Find the LXC IP:
 
 ```bash
 hostname -I
+```
+
+Open:
+
+```text
+http://<LXC-IP>:9090
 ```
 
 ## 12. Monitor GPU usage
@@ -144,65 +146,7 @@ hostname -I
 watch -n 1 nvidia-smi
 ```
 
-## Failures & Fixes
-
-### ❌ Old setup command
-
-```bash
-invokeai-configure
-```
-
-Error:
-
-```text
-command not found
-```
-
-Fix: Not used in InvokeAI 6.x.
-
-### ❌ CLI host/port flags
-
-```bash
-invokeai-web --host 0.0.0.0 --port 9090
-```
-
-Error:
-
-```text
-unrecognized arguments
-```
-
-Fix: Configure host and port in `invokeai.yaml`.
-
-### ❌ Missing `schema_version`
-
-Minimal config caused:
-
-```text
-KeyError: 'schema_version'
-```
-
-Fix:
-
-```yaml
-schema_version: 4.0.2
-```
-
-### ❌ Wrong PyTorch build
-
-Error:
-
-```text
-sm_120 not supported
-```
-
-Fix:
-
-```bash
-pip install torch==2.7.1+cu128 ...
-```
-
-## Recommended Models
+## Recommended models
 
 Start with:
 
@@ -212,5 +156,5 @@ Start with:
 
 Then try:
 
-- FLUX.1-schnell (fast)
-- FLUX.1-dev (higher quality)
+- FLUX.1-schnell
+- FLUX.1-dev
